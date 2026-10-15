@@ -129,6 +129,24 @@ let custom=ls("refv_custom",[]),orders=ls("refv_orders",[]),cfg=ls("refv_cfg",{p
 if(startupCfg.pp)cfg.pp=startupCfg.pp;if(startupCfg.gs)cfg.gs=startupCfg.gs;sv("refv_cfg",cfg);
 const validGS=u=>/^https:\/\/script\.google\.com\/(a\/macros\/[^/]+\/)?macros\/s\/[\w-]+\/exec/.test(u);
 orders=orders.filter(o=>!o.sample);if(cfg.gs&&!validGS(cfg.gs))orders.forEach(o=>o.synced=0);sv("refv_orders",orders);
+function mergeOrders(localList=[], sharedList=[]){
+  const all = [...(Array.isArray(localList)?localList:[]), ...(Array.isArray(sharedList)?sharedList:[])];
+  const map = new Map();
+  for (const o of all) {
+    const key = String(o && o.id ? o.id : '').trim();
+    if (!key) continue;
+    const prev = map.get(key);
+    const candidate = {
+      ...(prev || {}),
+      ...(o || {}),
+      items: Array.isArray(o && o.items) ? o.items : (prev && Array.isArray(prev.items) ? prev.items : []),
+      synced: Number(o && o.synced) === 1 || (prev && Number(prev.synced) === 1) ? 1 : 0,
+      ts: Number(o && o.ts) || Number(prev && prev.ts) || Date.now()
+    };
+    if (!prev || Number(candidate.ts) >= Number(prev.ts || 0)) map.set(key, candidate);
+  }
+  return Array.from(map.values()).sort((a,b)=>(Number(a.ts)||0)-(Number(b.ts)||0));
+}
 let S={type:"gelato",cups:1,picks:[]},cart=[],pay="cash",recv=0,period="7",pendingCat=null;
 const modeOf=(t,c)=>t==="affogato"?"aff":c===2?"g2":"g1",need=()=>S.type==="gelato"&&S.cups===2?2:1;
 const mkItem=(type,cups,drink,picks)=>{
@@ -253,6 +271,16 @@ async function loadCentralReport(){
   }
 }
 
+async function refreshSharedState(){
+  if(!cfg.gs||!validGS(cfg.gs)) return;
+  await loadCentralConfig();
+  const sharedOrders = await loadCentralReport();
+  orders = mergeOrders(orders, sharedOrders);
+  sv('refv_orders', orders);
+  renderSettings();
+  if (typeof renderReport === 'function') renderReport();
+}
+
 function renderSettings(){
  const ppEl=$("pp"),gsEl=$("gs");
  if(ppEl) ppEl.value=cfg.pp || "";
@@ -265,7 +293,8 @@ $("saveSet").onclick=async()=>{const gsEl=$("gs"),ppEl=$("pp");const g=(gsEl?gsE
   try {
    await fetch(g,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({type:'config',pp:cfg.pp})});
   } catch(e) {}
-  send(orders.filter(o=>!o.synced));
+  await refreshSharedState();
+  await send(orders.filter(o=>!o.synced));
  }
  alert("Saved")};
 $("syncBtn").onclick=async()=>{const gsEl=$("gs");cfg.gs=(gsEl?gsEl.value:" ").trim();await send(orders.filter(o=>!o.synced))};
@@ -281,7 +310,7 @@ function hbars(list,fmt=baht){const mx=Math.max(1,...list.map(x=>x.v)),w=h("div"
 async function renderReport(){
  seg($("period"),[["1","Today"],["7","7 days"],["30","30 days"],["all","All"]],period,v=>{period=v;renderReport()});
  const sharedOrders = await loadCentralReport();
- const sourceOrders = (sharedOrders.length ? sharedOrders : orders).filter(o => !o.sample);
+ const sourceOrders = mergeOrders(orders, sharedOrders).filter(o => !o.sample);
  const t0=new Date();t0.setHours(0,0,0,0);const from=period==="all"?0:t0.getTime()-(+period-1)*864e5;
  const os=sourceOrders.filter(o=>o.ts>=from),rev=os.reduce((s,o)=>s+o.total,0),cups=os.reduce((s,o)=>s+o.items.length,0);
  const sum=(f)=>{const m={};os.forEach(o=>f(o,(k,v,c=0)=>{m[k]=m[k]||{v:0,c:0};m[k].v+=v;m[k].c+=c}));return Object.entries(m).map(([l,x])=>({l,v:x.v,c:x.c})).sort((a,b)=>b.v-a.v)};
@@ -299,5 +328,8 @@ async function renderReport(){
  add("By category",hbars(cat.map(x=>({l:x.l,v:x.v,s:x.c+" scoops"}))));add("Flavors per cup / type",hbars(typ.map(x=>({l:x.l,v:x.v,s:x.c+" cups"}))));add("Payment methods",hbars(pay.map(x=>({l:x.l,v:x.v,s:x.c+" orders"}))));
 }
 renderSell();renderCart();showTab("sell");
-if(cfg.gs){loadCentralConfig();send(orders.filter(o=>!o.synced&&!o.sample));}
+if(cfg.gs){
+  refreshSharedState();
+  send(orders.filter(o=>!o.synced&&!o.sample));
+}
 </script></body></html>
