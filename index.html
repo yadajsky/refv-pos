@@ -129,6 +129,23 @@ let custom=ls("refv_custom",[]),orders=ls("refv_orders",[]),cfg=ls("refv_cfg",{p
 if(startupCfg.pp)cfg.pp=startupCfg.pp;if(startupCfg.gs)cfg.gs=startupCfg.gs;sv("refv_cfg",cfg);
 const validGS=u=>/^https:\/\/script\.google\.com\/(a\/macros\/[^/]+\/)?macros\/s\/[\w-]+\/exec/.test(u);
 orders=orders.filter(o=>!o.sample);if(cfg.gs&&!validGS(cfg.gs))orders.forEach(o=>o.synced=0);sv("refv_orders",orders);
+
+async function loadProjectConfig(){
+  try {
+    const r = await fetch('./config.json?ts=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    const project = {
+      pp: typeof data.pp === 'string' ? data.pp.trim() : '',
+      gs: typeof data.gs === 'string' ? data.gs.trim() : ''
+    };
+    if (!cfg.pp && project.pp) cfg.pp = project.pp;
+    if (!cfg.gs && project.gs) cfg.gs = project.gs;
+    if ((project.pp && !cfg.pp) || (project.gs && !cfg.gs)) sv('refv_cfg', cfg);
+    if (cfg.pp || cfg.gs) renderSettings();
+  } catch (e) {}
+}
+
 function mergeOrders(localList=[], sharedList=[]){
   const all = [...(Array.isArray(localList)?localList:[]), ...(Array.isArray(sharedList)?sharedList:[])];
   const map = new Map();
@@ -328,6 +345,7 @@ async function renderReport(){
  add("By category",hbars(cat.map(x=>({l:x.l,v:x.v,s:x.c+" scoops"}))));add("Flavors per cup / type",hbars(typ.map(x=>({l:x.l,v:x.v,s:x.c+" cups"}))));add("Payment methods",hbars(pay.map(x=>({l:x.l,v:x.v,s:x.c+" orders"}))));
 }
 renderSell();renderCart();showTab("sell");
+loadProjectConfig();
 if(cfg.gs){
   refreshSharedState();
   send(orders.filter(o=>!o.synced&&!o.sample));
