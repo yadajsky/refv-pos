@@ -119,6 +119,7 @@ dialog{border:0;border-radius:var(--r);padding:20px;width:min(420px,92vw);color:
 const CATS=["Original","Premium","Signature"];
 const BASE=[["Holy Cow!","Original",6],["Thai Tea","Original","thai-tea"],["Pecan't Sleep","Premium",5],["70% Into Dark Side","Premium",1],["Weirdly Wonderful","Premium",4],["Chocolate with Cherry Jam","Premium",1],["Nutting to Prove","Signature","nutting"],["Matcha Snob","Signature",2]].map(([n,c,i])=>({n,c,i}));
 const PRICE={g1:{Original:79,Premium:89,Signature:99},g2:{Original:40,Premium:45,Signature:50},aff:{Original:79,Premium:84,Signature:89}};
+const AFFOGATO_PRICE={Original:79,Premium:84,Signature:89};
 const $=id=>document.getElementById(id),baht=n=>"฿"+Math.round(n).toLocaleString();
 const h=(t,a={},...k)=>{const e=document.createElement(t);for(const[x,v]of Object.entries(a)){if(x==="text")e.textContent=v;else if(x.startsWith("on"))e[x]=v;else e.setAttribute(x,v)}e.append(...k);return e};
 const ls=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
@@ -130,7 +131,11 @@ const validGS=u=>/^https:\/\/script\.google\.com\/(a\/macros\/[^/]+\/)?macros\/s
 orders=orders.filter(o=>!o.sample);if(cfg.gs&&!validGS(cfg.gs))orders.forEach(o=>o.synced=0);sv("refv_orders",orders);
 let S={type:"gelato",cups:1,picks:[]},cart=[],pay="cash",recv=0,period="7",pendingCat=null;
 const modeOf=(t,c)=>t==="affogato"?"aff":c===2?"g2":"g1",need=()=>S.type==="gelato"&&S.cups===2?2:1;
-const mkItem=(type,cups,drink,picks)=>{const m=PRICE[modeOf(type,cups)];const parts=picks.map(p=>({name:p.n,cat:p.c,price:m[p.c]}));return{type,cups:type==="gelato"?cups:1,drink:type==="affogato"?"Espresso":"",parts,price:parts.reduce((s,p)=>s+p.price,0)}};
+const mkItem=(type,cups,drink,picks)=>{
+ const m = type === "affogato" ? AFFOGATO_PRICE : PRICE[modeOf(type,cups)];
+ const parts = picks.map(p => ({name:p.n,cat:p.c,price:m[p.c]}));
+ return {type,cups:type==="gelato"?cups:1,drink:type==="affogato"?"Espresso":"",parts,price:parts.reduce((s,p)=>s+p.price,0)};
+};
 const desc=i=>(i.type==="affogato"?"Affogato":`Gelato ×${i.cups}`)+": "+i.parts.map(p=>p.name).join(" + ");
 const allFlavors=()=>[...BASE,...custom.map(x=>({...x,x:1}))];
 
