@@ -101,7 +101,8 @@ dialog{border:0;border-radius:var(--r);padding:20px;width:min(420px,92vw);color:
  <div class="card">
   <div class="lab">PromptPay number (phone or 13-digit ID) for QR payment</div><input type="text" id="pp" inputmode="numeric" placeholder="0812345678">
   <div class="lab">Google Apps Script Web app URL (not the Google Sheet link)</div><input type="url" id="gs" placeholder="https://script.google.com/macros/s/.../exec">
-  <div class="row" style="margin-top:12px"><button class="btn" id="saveSet">Save</button><button class="btn sec" id="syncBtn">Sync unsent orders</button><button class="btn ghost" id="testBtn">Test connection</button><button class="btn ghost" id="resendBtn">Re-send all</button></div>
+  <div class="row" style="margin-top:12px"><button class="btn" id="saveSet">Save</button><button class="btn sec" id="syncBtn">Sync unsent orders</button><button class="btn ghost" id="testBtn">Test connection</button><button class="btn ghost" id="resendBtn">Re-send all</button>
+  </div>
   <div class="mut" id="syncInfo" style="margin-top:8px"></div>
  </div>
  <div class="card" style="margin-top:12px">
@@ -216,12 +217,17 @@ async function send(list){
  renderSettings();return ok}
 const csvText=()=>[HEAD,...orders.flatMap(rowsOf)].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
 $("csv").onclick=()=>{const a=h("a",{href:URL.createObjectURL(new Blob(["\ufeff"+csvText()],{type:"text/csv"})),download:`refv-sales-${dkey(Date.now())}.csv`});document.body.append(a);a.click();a.remove()};
-function renderSettings(){$("pp").value=cfg.pp;$("gs").value=cfg.gs;const u=orders.filter(o=>!o.synced).length;$("syncInfo").textContent=(cfg.gs?`${u} order(s) not yet sent to Google Sheets. `:"Add the Web app URL to send each order to Google Sheets automatically. ")+lastSync}
-$("saveSet").onclick=()=>{const g=$("gs").value.trim();if(g&&!validGS(g)){alert("This is not a Web app URL.\nIt must start with https://script.google.com/macros/s/ and end with /exec.\nDo not paste the Google Sheet link.");return}
- cfg={pp:$("pp").value.trim(),gs:g};sv("refv_cfg",cfg);renderCart();renderSettings();alert("Saved");if(g)send(orders.filter(o=>!o.synced))};
-$("syncBtn").onclick=async()=>{cfg.gs=$("gs").value.trim();await send(orders.filter(o=>!o.synced))};
-$("resendBtn").onclick=async()=>{cfg.gs=$("gs").value.trim();await send(orders)};
-$("testBtn").onclick=async()=>{const u=$("gs").value.trim(),i=$("syncInfo");if(!validGS(u)){i.textContent="This is not a Web app URL. It must start with https://script.google.com/macros/s/ and end with /exec.";return}
+function renderSettings(){
+ const ppEl=$("pp"),gsEl=$("gs");
+ if(ppEl) ppEl.value=cfg.pp || "";
+ if(gsEl) gsEl.value=cfg.gs || "";
+ const u=orders.filter(o=>!o.synced).length;
+ $("syncInfo").textContent=(cfg.gs?`${u} order(s) not yet sent to Google Sheets. `:"Add the Web app URL to send each order to Google Sheets automatically. ")+lastSync}
+$("saveSet").onclick=()=>{const gsEl=$("gs"),ppEl=$("pp");const g=(gsEl?gsEl.value:" ").trim();if(g&&!validGS(g)){alert("This is not a Web app URL.\nIt must start with https://script.google.com/macros/s/ and end with /exec.\nDo not paste the Google Sheet link.");return}
+ cfg={pp:(ppEl?ppEl.value:" ").trim(),gs:g};sv("refv_cfg",cfg);renderCart();renderSettings();alert("Saved");if(g)send(orders.filter(o=>!o.synced))};
+$("syncBtn").onclick=async()=>{const gsEl=$("gs");cfg.gs=(gsEl?gsEl.value:" ").trim();await send(orders.filter(o=>!o.synced))};
+$("resendBtn").onclick=async()=>{const gsEl=$("gs");cfg.gs=(gsEl?gsEl.value:" ").trim();await send(orders)};
+$("testBtn").onclick=async()=>{const gsEl=$("gs"),i=$("syncInfo");const u=(gsEl?gsEl.value:" ").trim();if(!validGS(u)){i.textContent="This is not a Web app URL. It must start with https://script.google.com/macros/s/ and end with /exec.";return}
  i.textContent="Testing...";try{const t=await(await fetch(u)).text();i.textContent=t.includes("REFV POS ready")?"Connected to your Google Sheet script.":"Reached Google, but this is not the latest REFV script. Paste the new apps-script.gs, then Deploy > Manage deployments > Edit > New version."}catch(e){i.textContent="No readable reply. Make sure Who has access = Anyone and the script is deployed as a Web app."}};
 $("clearAll").onclick=()=>{if(!orders.length){alert("There is no sales data on this device.");return}
  if(confirm(`Delete all ${orders.length} orders from this device?\nDownload the CSV first if you need them. This cannot be undone.\n(Rows already in Google Sheets are not deleted.)`)){orders=[];sv("refv_orders",orders);renderSettings();alert("Sales data cleared.")}};
